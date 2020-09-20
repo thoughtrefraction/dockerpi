@@ -1,6 +1,6 @@
 # Build stage for qemu-system-arm
 FROM debian:stable-slim AS qemu-builder
-ARG QEMU_VERSION=4.2.0
+ARG QEMU_VERSION=5.1.0
 ENV QEMU_TARBALL="qemu-${QEMU_VERSION}.tar.xz"
 WORKDIR /qemu
 
@@ -14,12 +14,12 @@ RUN wget "https://download.qemu.org/${QEMU_TARBALL}"
 RUN # Verify signatures
 RUN apt-get -y install gpg
 RUN wget "https://download.qemu.org/${QEMU_TARBALL}.sig"
-RUN gpg --keyserver keyserver.ubuntu.com --recv-keys CEACC9E15534EBABB82D3FA03353C9CEF108B584
+RUN gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys CEACC9E15534EBABB82D3FA03353C9CEF108B584
 RUN gpg --verify "${QEMU_TARBALL}.sig" "${QEMU_TARBALL}"
 
 RUN # Extract source tarball
 RUN apt-get -y install pkg-config
-RUN tar xvf "${QEMU_TARBALL}"
+RUN tar xf "${QEMU_TARBALL}"
 
 RUN # Build source
 # These seem to be the only deps actually required for a successful  build
@@ -51,7 +51,7 @@ RUN wget "https://github.com/Gregwar/fatcat/archive/${FATCAT_TARBALL}"
 RUN echo "${FATCAT_CHECKSUM} ${FATCAT_TARBALL}" | sha256sum --check
 
 RUN # Extract source tarball
-RUN tar xvf "${FATCAT_TARBALL}"
+RUN tar xf "${FATCAT_TARBALL}"
 
 RUN # Build source
 RUN apt-get -y install build-essential cmake
@@ -60,23 +60,29 @@ RUN make -j$(nproc)
 
 
 # Build the dockerpi VM image
-FROM busybox:1.31 AS dockerpi-vm
+FROM busybox:latest AS dockerpi-vm
 LABEL maintainer="Luke Childs <lukechilds123@gmail.com>"
-ARG RPI_KERNEL_URL="https://github.com/dhruvvyas90/qemu-rpi-kernel/archive/afe411f2c9b04730bcc6b2168cdc9adca224227c.zip"
-ARG RPI_KERNEL_CHECKSUM="295a22f1cd49ab51b9e7192103ee7c917624b063cc5ca2e11434164638aad5f4"
+#ARG RPI_KERNEL_URL="https://github.com/dhruvvyas90/qemu-rpi-kernel/archive/afe411f2c9b04730bcc6b2168cdc9adca224227c.zip"
+ARG RPI_KERNEL_URL="https://github.com/dhruvvyas90/qemu-rpi-kernel/raw/master/kernel-qemu-5.4.51-buster"
+#ARG RPI_KERNEL_CHECKSUM="295a22f1cd49ab51b9e7192103ee7c917624b063cc5ca2e11434164638aad5f4"
+ARG RPI_KERNEL_DTB="https://github.com/dhruvvyas90/qemu-rpi-kernel/raw/master/versatile-pb-buster-5.4.51.dtb"
 
 COPY --from=qemu-builder /qemu/arm-softmmu/qemu-system-arm /usr/local/bin/qemu-system-arm
 COPY --from=qemu-builder /qemu/aarch64-softmmu/qemu-system-aarch64 /usr/local/bin/qemu-system-aarch64
 COPY --from=fatcat-builder /fatcat/fatcat /usr/local/bin/fatcat
 
-ADD $RPI_KERNEL_URL /tmp/qemu-rpi-kernel.zip
+#ADD $RPI_KERNEL_URL /tmp/qemu-rpi-kernel.zip
+ADD $RPI_KERNEL_URL /tmp/kernel-qemu-5.4.51-buster
+ADD $RPI_KERNEL_DTB /tmp/versatile-pb-buster-5.4.51.dtb
 
 RUN cd /tmp && \
-    echo "$RPI_KERNEL_CHECKSUM  qemu-rpi-kernel.zip" | sha256sum -c && \
-    unzip qemu-rpi-kernel.zip && \
+    #echo "$RPI_KERNEL_CHECKSUM  qemu-rpi-kernel.zip" | sha256sum -c && \
+    #unzip qemu-rpi-kernel.zip && \
     mkdir -p /root/qemu-rpi-kernel && \
-    cp qemu-rpi-kernel-*/kernel-qemu-4.19.50-buster /root/qemu-rpi-kernel/ && \
-    cp qemu-rpi-kernel-*/versatile-pb.dtb /root/qemu-rpi-kernel/ && \
+    #cp qemu-rpi-kernel-*/kernel-qemu-4.19.50-buster /root/qemu-rpi-kernel/ && \
+    cp kernel-qemu-5.4.51-buster /root/qemu-rpi-kernel/ && \
+    #cp qemu-rpi-kernel-*/versatile-pb.dtb /root/qemu-rpi-kernel/ && \
+    cp versatile-pb-buster-5.4.51.dtb /root/qemu-rpi-kernel/ && \
     rm -rf /tmp/*
 
 VOLUME /sdcard
@@ -89,8 +95,10 @@ ENTRYPOINT ["./entrypoint.sh"]
 # It's just the VM image with a compressed Raspbian filesystem added
 FROM dockerpi-vm as dockerpi
 LABEL maintainer="Luke Childs <lukechilds123@gmail.com>"
-ARG FILESYSTEM_IMAGE_URL="http://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2019-09-30/2019-09-26-raspbian-buster-lite.zip"
-ARG FILESYSTEM_IMAGE_CHECKSUM="a50237c2f718bd8d806b96df5b9d2174ce8b789eda1f03434ed2213bbca6c6ff"
+#ARG FILESYSTEM_IMAGE_URL="http://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2019-09-30/2019-09-26-raspbian-buster-lite.zip"
+ARG FILESYSTEM_IMAGE_URL="https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2020-08-24/2020-08-20-raspios-buster-armhf-lite.zip"
+#ARG FILESYSTEM_IMAGE_CHECKSUM="a50237c2f718bd8d806b96df5b9d2174ce8b789eda1f03434ed2213bbca6c6ff"
+ARG FILESYSTEM_IMAGE_CHECKSUM="4522df4a29f9aac4b0166fbfee9f599dab55a997c855702bfe35329c13334668"
 
 ADD $FILESYSTEM_IMAGE_URL /filesystem.zip
 

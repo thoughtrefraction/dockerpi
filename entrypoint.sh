@@ -3,22 +3,31 @@
 target="${1:-pi1}"
 image_path="/sdcard/filesystem.img"
 zip_path="/filesystem.zip"
-
+cpu="--cpu arm1176"
 if [ ! -e $image_path ]; then
   echo "No filesystem detected at ${image_path}!"
   if [ -e $zip_path ]; then
       echo "Extracting fresh filesystem..."
       unzip $zip_path
-      mv -- *.img $image_path
+      mv *.img $image_path
   else
     exit 1
   fi
 fi
 
-if [ "${target}" = "pi1" ]; then
+if [ "${target}" = "pi0" ]; then
   emulator=qemu-system-arm
-  kernel="/root/qemu-rpi-kernel/kernel-qemu-4.19.50-buster"
-  dtb="/root/qemu-rpi-kernel/versatile-pb.dtb"
+  kernel="/root/qemu-rpi-kernel/kernel-qemu-5.4.51-buster"
+  dtb="/root/qemu-rpi-kernel/versatile-pb-buster-5.4.51.dtb"
+  machine=virt
+  cpu=""
+  memory=512m
+  root=/dev/sda2
+  nic='--net nic --net user,hostfwd=tcp::5022-:22'
+elif [ "${target}" = "pi1" ]; then
+  emulator=qemu-system-arm
+  kernel="/root/qemu-rpi-kernel/kernel-qemu-5.4.51-buster"
+  dtb="/root/qemu-rpi-kernel/versatile-pb-buster-5.4.51.dtb"
   machine=versatilepb
   memory=256m
   root=/dev/sda2
@@ -39,7 +48,7 @@ elif [ "${target}" = "pi3" ]; then
   nic=''
 else
   echo "Target ${target} not supported"
-  echo "Supported targets: pi1 pi2 pi3"
+  echo "Supported targets: pi0 pi1 pi2 pi3"
   exit 2
 fi
 
@@ -48,7 +57,7 @@ if [ "${kernel_pattern}" ] && [ "${dtb_pattern}" ]; then
   echo "Extracting partitions"
   fdisk -l ${image_path} \
     | awk "/^[^ ]*1/{print \"dd if=${image_path} of=${fat_path} bs=512 skip=\"\$4\" count=\"\$6}" \
-    | sh
+    | tail -n 1 | sh
 
   echo "Extracting boot filesystem"
   fat_folder="/fat"
@@ -72,7 +81,8 @@ fi
 echo "Booting QEMU machine \"${machine}\" with kernel=${kernel} dtb=${dtb}"
 exec ${emulator} \
   --machine "${machine}" \
-  --cpu arm1176 \
+  #--cpu arm1176 \
+  ${cpu} \
   --m "${memory}" \
   --drive "format=raw,file=${image_path}" \
   ${nic} \
